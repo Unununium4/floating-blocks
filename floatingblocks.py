@@ -6,16 +6,19 @@ Created on Thu Apr 29 15:46:14 2021
 """
 
 from bitarray import bitarray
-from bitarray.util import strip
+from bitarray.util import strip, int2ba, zeros as zerosBA
 import math
 import time
 import sys
 import numpy as np
 
+# TODO: Add more descriptive comments about what's happening in each segment of code here
+# TODO: Break up this big script into some testable/verifiable functions
+
 start_time = time.time()
 #parameters to diddle with
 #max length is the max length of either the left or right leaf without zero trimming
-maxLength = 14
+maxLength=8
 gapSize=4
 justOne=False #just take the 1st solution or find all and report the shortest
 #
@@ -26,25 +29,17 @@ if gapSize<=1 | (not isinstance(gapSize,int)):
 
 #precalc the list of patterns to find
 numGapBytes = math.ceil(gapSize/8)
-inFieldPatterns = []
-for i in range(1,(2**gapSize)-1):
-    patternByte = i.to_bytes(numGapBytes,'big')
-    tempBA = bitarray()
-    tempBA.frombytes(patternByte)
-    inFieldPatterns.append(tempBA[-gapSize:])
+inFieldPatterns = [
+    int2ba(i, gapSize, 'big') for i in range(1,(2**gapSize)-1)
+]
 numPatterns = len(inFieldPatterns)
 
 #precalc the gap bits
-gaps=[]
-for gap in range (gapSize+1):
-    gaps.append(bitarray(gap*str('0')))
+gaps=[zerosBA(gap, 'big') for gap in range(gapSize + 1)]
 
 #create some special blocks that can reduce total time to search
-fullBlock = bitarray()  #a pattern with 2 leaves abutted must have a full block otherwise skip it.  done later in code
-fBI = (2**gapSize)-1
-fBIByte = fBI.to_bytes(numGapBytes,'big')
-fullBlock.frombytes(fBIByte)
-fullBlock=fullBlock[-gapSize:]
+#a pattern with 2 leaves abutted must have a full block otherwise skip it.  done later in code
+fullBlock = int2ba((2**gapSize) - 1, gapSize, 'big')
 #edge cases will happen in every case per the way we construct leaves that we test, so we dont need to look for them
 edgeBlock10=bitarray('1')       
 edgeBlock10.extend(gaps[gapSize-1])
@@ -57,21 +52,29 @@ inFieldPatterns.remove(edgeBlock01)
 inFieldPatterns.remove(edgeBlock10)
 inFieldPatterns.remove(edgeBlock101)
 
+# NOTE: (@nihonjinrxs rbharvey) This seems to be searching over all the
+#       in-field patterns of length gapSize generated above to find
+#       available gaps and split them on those gaps. Is that correct?
+#       If so, I think this might be better done with a bitwise and-based
+#       search. (Treat the bit array as an unsigned int and bitshift+and
+#       to match the gap or not. With bitarray, you can index into/slice
+#       the bitarray instead of bitshifting.)
 groupedPats =[]
 iFPC = inFieldPatterns.copy()
 for i in range(gapSize-2):
     thisGroup=[]
     j=0
     while len(iFPC)>0:
-       if len(iFPC[j].search(gaps[gapSize-2-i]))>0:
-           thisGroup.append(iFPC[j])
-           iFPC.remove(iFPC[j])
-           j-=1
-       j+=1
-       if j==len(iFPC):
-           break
+        if len(iFPC[j].search(gaps[gapSize-2-i]))>0:
+            thisGroup.append(iFPC[j])
+            iFPC.remove(iFPC[j])
+            j-=1
+        j+=1
+        if j==len(iFPC):
+            break
     groupedPats.insert(0,thisGroup)
-groupOrder = np.argsort([len(s) for s in groupedPats])#search smallest first!
+#search smallest first!
+groupOrder = np.argsort([len(s) for s in groupedPats])
 
 #create all leaf pattern attempts, throw out definitely bad ones
 skipSeq0 = bitarray('1')
@@ -85,15 +88,14 @@ first.extend(bitarray('1'))
 leavesToTryL.append(first)
 leavesToTryR.append(first[::-1])
 
+print("skipSeq0 = '%s', skipSeq1 = '%s', first = '%s', first[::-1] = '%s'" % (skipSeq0.to01(), skipSeq1.to01(), first.to01(), first[::-1].to01()))
+
 for leafLength in range(1,maxLength+1):
     minLeafLength = min([leafLength+gapSize-1,maxLength])
     numLeafBytes = math.ceil(minLeafLength/8)
     #if the lowest bit is 0 skip it.  kinda what we do a few lines down but this saves some cycles
     for leafTry in range((2**(leafLength-1))+1, 2**leafLength,2):    
-        tempTry = leafTry.to_bytes(numLeafBytes,'big')
-        tryLeaf = bitarray()
-        tryLeaf.frombytes(tempTry)
-        tryLeaf = tryLeaf[-minLeafLength:]
+        tryLeaf = int2ba(leafTry, minLeafLength, 'big')
         #if there is a gap as wide as or wider than the gap, throw it out
         gapSearch = strip(tryLeaf, mode='left')
         skipL0 = len(gapSearch.search(skipSeq0,1))
@@ -109,6 +111,7 @@ numLeavesToTry = len(leavesToTryL)
 
 solutions=[]
 oldTimePassed = (time.time()-start_time)
+# TODO: FIXME: Way to much nested looping happening here.
 for L in range(numLeavesToTry):       
     leftLeaf=leavesToTryL[L]
     timePassed = (time.time()-start_time)
