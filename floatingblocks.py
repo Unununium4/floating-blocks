@@ -16,7 +16,7 @@ start_time = time.time()
 #parameters to diddle with
 #max length is the max length of either the left or right leaf without zero trimming
 maxLength = 14
-gapSize=4
+gapSize=5
 justOne=False #just take the 1st solution or find all and report the shortest
 #
 
@@ -63,13 +63,13 @@ for i in range(gapSize-2):
     thisGroup=[]
     j=0
     while len(iFPC)>0:
-       if len(iFPC[j].search(gaps[gapSize-2-i]))>0:
-           thisGroup.append(iFPC[j])
-           iFPC.remove(iFPC[j])
-           j-=1
-       j+=1
-       if j==len(iFPC):
-           break
+        if sum(1 for _ in iFPC[j].search(gaps[gapSize-2-i])) >0:
+            thisGroup.append(iFPC[j])
+            iFPC.remove(iFPC[j])
+            j-=1
+        j+=1
+        if j==len(iFPC):
+            break
     groupedPats.insert(0,thisGroup)
 groupOrder = np.argsort([len(s) for s in groupedPats])#search smallest first!
 
@@ -96,11 +96,11 @@ for leafLength in range(1,maxLength+1):
         tryLeaf = tryLeaf[-minLeafLength:]
         #if there is a gap as wide as or wider than the gap, throw it out
         gapSearch = strip(tryLeaf, mode='left')
-        skipL0 = len(gapSearch.search(skipSeq0,1))
+        skipL0 = sum(1 for _ in gapSearch.search(skipSeq0,1))
         if skipL0==1:
             continue 
         #if there is a block wider than the gap throw it out
-        skipL1 = len(tryLeaf.search(skipSeq1,1)) 
+        skipL1 = sum(1 for _ in tryLeaf.search(skipSeq1,1)) 
         if skipL1==1:
             continue 
         leavesToTryL.append(tryLeaf)
@@ -130,7 +130,7 @@ for L in range(numLeavesToTry):
         fullPattern = bitarray()
         fullPattern.extend(leftLeaf)
         fullPattern.extend(rightLeaf)   
-        if not(len(fullPattern.search(fullBlock,1))):       
+        if not(sum(1 for _ in fullPattern.search(fullBlock,1))):       
             continue
         rightOfGap = min([gapSize-1, len(rightLeaf)])
         
@@ -139,7 +139,7 @@ for L in range(numLeavesToTry):
         while group <len(testPatterns):
             pat=0
             while pat<len(testPatterns[group]):        
-                if len(fullPattern.search(testPatterns[group][pat],1)):        
+                if sum(1 for _ in fullPattern.search(testPatterns[group][pat],1)):        
                     del testPatterns[group][pat]
                     pat-=1
                 pat+=1
@@ -164,7 +164,7 @@ for L in range(numLeavesToTry):
             fullPattern=fullPattern[startIndex:stopIndex]
             pat=0
             while pat<len(testPatterns[thisGroup]):        
-                if len(fullPattern.search(testPatterns[thisGroup][pat],1)):        
+                if sum(1 for _ in fullPattern.search(testPatterns[thisGroup][pat],1)):        
                     del testPatterns[thisGroup][pat]
                     pat-=1
                 pat+=1
